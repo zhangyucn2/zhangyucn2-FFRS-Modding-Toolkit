@@ -1,0 +1,5 @@
+# FFRS 音频 key（cricodecs 用）
+# 把下面一行替换成你的 key（0x + 14~16 位十六进制），然后另存为 criwarekey.txt
+# 获取方式：运行 python\FFRS_AudioKeyTool.py 自动获取，或手动：
+#   cricodecs --recover-key -f hca <游戏原始 HCA>
+# 0x0123456789ABCD

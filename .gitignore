@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 运行时配置 / 缓存 / 个人数据
+python/config/
+python/save/
+Input/
+Output/
+
+# 音频 key（只保留 example 模板）
+tools/criwarekey.txt
+tools/criwarekey.local.txt
+
+# 外部二进制与游戏资产
+*.exe
+*.dll
+*.usmap
+*.usm
+*.uasset
+*.uexp
+*.pak
+*.utoc
+*.ucas
+
+# 压缩包 / 临时文件
+*.zip
+*.7z
+*.rar
+*.tmp
+*.log
+Thumbs.db
+desktop.ini
