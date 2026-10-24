@@ -120,4 +120,4 @@ It automatically detects the MODs in the output folder. Usually you only need to
 
 # Final words
 
-The big blue fat fish is still fairly reliable. Have fun!
+Deepseek is still fairly reliable. Have fun!
