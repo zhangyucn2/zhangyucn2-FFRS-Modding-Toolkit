@@ -1,5 +1,7 @@
 # 最终幻想共鸣模组制作工具使用说明
 
+> 启动：双击 `启动 Toolkit.bat`，或运行 `python FFRS_Toolkit.py`。
+
 > English manual: [FFRS_Modding_Toolkit_Manual_EN.md](FFRS_Modding_Toolkit_Manual_EN.md)
 
 

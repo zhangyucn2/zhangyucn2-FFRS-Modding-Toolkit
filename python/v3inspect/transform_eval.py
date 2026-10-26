@@ -28,6 +28,7 @@ import sprite_slice_analyzer_multitex as ssbase
 MAGIC_ANIM = bytes.fromhex('80 0D 22')
 MAGIC_SETUP = bytes.fromhex('80 0D 02')
 KEY_MARKER = bytes.fromhex('80 0F 7F')
+CURVE_KEY_MARKERS = {bytes.fromhex('80 0F 70'): 4, bytes.fromhex('80 0F 74'): 3, bytes.fromhex('80 0F 78'): 3}
 MAGIC_CELL_KEY = bytes.fromhex('80 05 01')
 
 # FFRS transform attributes observed in the cooked resources.
@@ -55,6 +56,10 @@ class Part:
 
 
 def read_value(b, p, end):
+    for mk, n in CURVE_KEY_MARKERS.items():
+        if b[p:p+3] == mk and p + 3 + n * 4 <= end:
+            vals = struct.unpack_from('<%df' % n, b, p + 3)
+            return 'curve', vals[0], p + 3 + n * 4
     if b[p:p+4] == bytes.fromhex('80 09 0E 03'):
         return 'zero', 0, p + 4
     if b[p:p+4] == bytes.fromhex('80 09 0E 05'):
@@ -71,8 +76,18 @@ def read_value(b, p, end):
     raise ValueError(f'Unknown value codec @0x{p:X}: {b[p:p+20].hex(" ")}')
 
 
+def find_key_marker(b, start, end):
+    """Find the next key marker, including Bezier/curve markers used by some assets."""
+    best = -1
+    for mk in (KEY_MARKER, *CURVE_KEY_MARKERS):
+        x = b.find(mk, start, end)
+        if x >= 0 and (best < 0 or x < best):
+            best = x
+    return best
+
+
 def frame_from_prefix(pre):
-    if pre in (bytes.fromhex('80 09 03'), bytes.fromhex('80 09 01 01')):
+    if pre in (bytes.fromhex('80 09 03'), bytes.fromhex('80 09 01 01'), bytes.fromhex('80 09 01 03')):
         return 0
     if len(pre) == 7 and pre[:3] == bytes.fromhex('80 09 02'):
         return struct.unpack_from('<I', pre, 3)[0]
@@ -82,23 +97,37 @@ def frame_from_prefix(pre):
         return pre[2]
     if len(pre) == 7 and pre[:2] == bytes.fromhex('00 09') and pre[3:] == bytes.fromhex('00 00 00 03'):
         return pre[2]
+    # newer cooked assets (e.g. summon13128) use a 01 flag before the 00 00 01 tail
+    if len(pre) == 7 and pre[:2] == bytes.fromhex('00 09') and pre[3:] == bytes.fromhex('01 00 00 01'):
+        return pre[2]
     raise ValueError(f'Unknown frame header: {pre.hex(" ")}')
 
 
 def parse_keys(b, q, end, count):
-    first_mark = b.find(KEY_MARKER, q, end)
+    first_mark = find_key_marker(b, q, end)
     if first_mark < 0:
         raise ValueError(f'No first key marker @0x{q:X}')
     frame = frame_from_prefix(b[q:first_mark])
     marker = first_mark
     keys = []
     for i in range(count):
-        value_type, value, vend = read_value(b, marker + 3, end)
+        mk = b[marker:marker+3]
+        if mk in CURVE_KEY_MARKERS:
+            n = CURVE_KEY_MARKERS[mk]
+            value_type, value, vend = 'curve', struct.unpack_from('<f', b, marker + 3)[0], marker + 3 + n * 4
+            # some curve keys append a normal scalar value codec after the floats
+            if b[vend:vend+2] == b'\x80\x09':
+                try:
+                    _, _, vend = read_value(b, vend, end)
+                except ValueError:
+                    pass
+        else:
+            value_type, value, vend = read_value(b, marker + 3, end)
         keys.append({'frame': frame, 'value_type': value_type, 'value': value,
                      'marker': marker, 'end': vend})
         if i + 1 == count:
             return keys, vend
-        next_mark = b.find(KEY_MARKER, vend, end)
+        next_mark = find_key_marker(b, vend, end)
         if next_mark < 0:
             raise ValueError(f'No next key marker after @0x{vend:X}')
         frame = frame_from_prefix(b[vend:next_mark])
@@ -110,7 +139,7 @@ def skip_unknown_attr(b, q, end, count):
     p = q
     last = None
     for _ in range(count):
-        last = b.find(KEY_MARKER, p, end)
+        last = find_key_marker(b, p, end)
         if last < 0:
             raise ValueError('Unknown attribute has fewer key markers than count')
         # We do not need to decode these keys, only to advance safely.
