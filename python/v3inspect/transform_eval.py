@@ -93,11 +93,9 @@ def frame_from_prefix(pre):
         return struct.unpack_from('<I', pre, 3)[0]
     if len(pre) == 8 and pre[0] == 1 and pre[1:4] == bytes.fromhex('80 09 02'):
         return struct.unpack_from('<I', pre, 4)[0]
-    if len(pre) == 7 and pre[:2] == bytes.fromhex('00 09') and pre[3:] == bytes.fromhex('00 00 00 01'):
+    if len(pre) == 7 and pre[:2] == bytes.fromhex('00 09') and pre[3:6] == b'\x00\x00\x00':
         return pre[2]
-    if len(pre) == 7 and pre[:2] == bytes.fromhex('00 09') and pre[3:] == bytes.fromhex('00 00 00 03'):
-        return pre[2]
-    # newer cooked assets (e.g. summon13128) use a 01 flag before the 00 00 01 tail
+    # newer cooked assets use a 01 flag before the 00 00 01 tail
     if len(pre) == 7 and pre[:2] == bytes.fromhex('00 09') and pre[3:] == bytes.fromhex('01 00 00 01'):
         return pre[2]
     raise ValueError(f'Unknown frame header: {pre.hex(" ")}')
@@ -210,6 +208,8 @@ def parse_animations(uasset: Path, uexp: Path):
         frame_count = struct.unpack_from('<I', b, off + 18)[0]
         is_normal_anim = magic == MAGIC_ANIM and settings[:3] in (bytes.fromhex('80 0F 34'), bytes.fromhex('80 0F 30'), bytes.fromhex('80 0F 10'))
         is_pose_anim = magic == MAGIC_ANIM and settings[:3] == bytes.fromhex('80 0F 74')
+        # unit0030 style: one-byte flag, canvas at +23, part count at +31, first Part at +35
+        is_flat70_anim = magic == MAGIC_ANIM and settings[:3] == bytes.fromhex('80 0F 70')
         if is_normal_anim:
             pc0 = struct.unpack_from('<I', b, off + 34)[0]
             pc1 = struct.unpack_from('<I', b, off + 35)[0] if off + 39 <= len(b) else 0
@@ -233,6 +233,11 @@ def parse_animations(uasset: Path, uexp: Path):
                 q = off + 38
                 canvas_x, canvas_y = struct.unpack_from('<2f', b, off + 22)
                 end_frame = struct.unpack_from('<I', b, off + 30)[0]
+        elif is_flat70_anim:
+            part_count = struct.unpack_from('<I', b, off + 31)[0]
+            q = off + 35
+            canvas_x, canvas_y = struct.unpack_from('<2f', b, off + 23)
+            end_frame = frame_count
         elif is_pose_anim or magic == MAGIC_SETUP:
             part_count = None
             q = off + 34
